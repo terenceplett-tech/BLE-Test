@@ -2,7 +2,7 @@
 ## BLE Milk Frother Controller
 
 **Project:** DIY BLE-Controlled Milk Frother with Temperature Regulation
-**Version:** 1.1
+**Version:** 1.2
 **Date:** 2026-03-23
 **Author:** terenceplett-tech
 
@@ -243,7 +243,208 @@ android/MilkFrotherApp/
 
 ---
 
-## 9. Out of Scope
+## 9. Validation
+
+This section defines the test procedures to verify that all functional and non-functional requirements have been met before the device is considered complete.
+
+---
+
+### 9.1 Hardware Validation
+
+#### HW-V-01 — Power Supply Output
+| | |
+|--|--|
+| **Objective** | Confirm LDO outputs stable 3.3V under load |
+| **Equipment** | Multimeter |
+| **Procedure** | 1. Fully charge LiPo. 2. Power on device. 3. Measure voltage at ESP32 3.3V pin and TMP61 VCC. |
+| **Pass Criteria** | Voltage reads 3.28V – 3.32V with ESP32 active and BLE advertising. |
+
+#### HW-V-02 — Relay Motor Control
+| | |
+|--|--|
+| **Objective** | Confirm Relay 1 (GPIO 26) switches correctly |
+| **Equipment** | Multimeter in continuity or voltage mode |
+| **Procedure** | 1. Send Motor ON command via BLE. 2. Measure relay output contacts. 3. Send Motor OFF command. 4. Measure again. |
+| **Pass Criteria** | Relay closes (continuity / voltage passes) on ON; opens on OFF. |
+
+#### HW-V-03 — Relay Heater Control
+| | |
+|--|--|
+| **Objective** | Confirm Relay 2 (GPIO 27) switches correctly |
+| **Equipment** | Multimeter |
+| **Procedure** | Same as HW-V-02 but using Heater toggle in app. |
+| **Pass Criteria** | Relay closes on ON; opens on OFF. |
+
+#### HW-V-04 — TMP61 Temperature Accuracy
+| | |
+|--|--|
+| **Objective** | Confirm TMP61 ADC reading matches actual temperature |
+| **Equipment** | Reference thermometer (e.g. kitchen probe), cup of water at known temperatures |
+| **Procedure** | 1. Prepare water at 40°C, 60°C, and 80°C (verify with reference thermometer). 2. Immerse TMP61 sensor. 3. Read temperature shown in app. |
+| **Pass Criteria** | App reading is within ±3°C of reference thermometer at all three points. |
+
+#### HW-V-05 — Safety Shutoff on Power Loss
+| | |
+|--|--|
+| **Objective** | Confirm relays default to OFF on power-up |
+| **Equipment** | Multimeter |
+| **Procedure** | 1. With relays previously ON, remove and reapply battery power. 2. Immediately measure relay output contacts. |
+| **Pass Criteria** | Both relays are OPEN (OFF) within 1 second of power-up, before any BLE connection. |
+
+---
+
+### 9.2 BLE Communication Validation
+
+#### BLE-V-01 — Device Discovery
+| | |
+|--|--|
+| **Objective** | Confirm device is discoverable under the correct name |
+| **Procedure** | 1. Open Android app. 2. Tap Scan. 3. Check scan results. |
+| **Pass Criteria** | Device `MilkFrother` appears in the scan list within 5 seconds. |
+| **Requirement** | FR-08, NFR-02 |
+
+#### BLE-V-02 — BLE Connection
+| | |
+|--|--|
+| **Objective** | Confirm app connects successfully to the ESP32 |
+| **Procedure** | 1. Tap `MilkFrother` in scan results. 2. Observe connection status bar. |
+| **Pass Criteria** | Status bar shows "Connected — MilkFrother" within 5 seconds. |
+
+#### BLE-V-03 — BLE Range
+| | |
+|--|--|
+| **Objective** | Confirm BLE connection holds at ≥ 5 metres |
+| **Procedure** | 1. Connect to device. 2. Move phone 5 metres away (through typical kitchen environment). 3. Observe connection and temperature updates. |
+| **Pass Criteria** | Connection remains stable and temperature updates continue without interruption. |
+| **Requirement** | NFR-02 |
+
+#### BLE-V-04 — Disconnect Safety Shutoff
+| | |
+|--|--|
+| **Objective** | Confirm relays turn OFF immediately when BLE disconnects |
+| **Procedure** | 1. Connect app and turn ON both motor and heater. 2. Disable Bluetooth on phone (or move out of range). 3. Observe relay state with multimeter. |
+| **Pass Criteria** | Both relays open (OFF) within 2 seconds of BLE disconnection. |
+| **Requirement** | FR-07, NFR-03 |
+
+---
+
+### 9.3 Functional Validation
+
+#### FN-V-01 — Independent Motor Control
+| | |
+|--|--|
+| **Objective** | Confirm motor can be turned ON/OFF without affecting heater |
+| **Procedure** | 1. Turn heater ON, motor OFF. 2. Confirm only Relay 1 state changes when toggling motor. 3. Confirm heater relay is unaffected. |
+| **Pass Criteria** | Motor relay toggles; heater relay remains unchanged. |
+| **Requirement** | FR-01 |
+
+#### FN-V-02 — Independent Heater Control
+| | |
+|--|--|
+| **Objective** | Confirm heater can be turned ON/OFF without affecting motor |
+| **Procedure** | 1. Turn motor ON, heater OFF. 2. Toggle heater ON and OFF. 3. Confirm motor relay is unaffected. |
+| **Pass Criteria** | Heater relay toggles; motor relay remains unchanged. |
+| **Requirement** | FR-02 |
+
+#### FN-V-03 — Real-Time Temperature Display
+| | |
+|--|--|
+| **Objective** | Confirm app displays live temperature updates |
+| **Procedure** | 1. Connect app. 2. Observe temperature value on screen. 3. Warm the TMP61 sensor by hand. 4. Observe temperature change in app. |
+| **Pass Criteria** | Temperature value updates within 2 seconds of sensor change. Reading increases as sensor is warmed. |
+| **Requirement** | FR-03, NFR-01 |
+
+#### FN-V-04 — Target Temperature Setting
+| | |
+|--|--|
+| **Objective** | Confirm target temperature can be set across the full range |
+| **Procedure** | 1. Move slider to minimum (40°C). 2. Move slider to maximum (90°C). 3. Set to 65°C. 4. Confirm value is accepted by firmware (read back characteristic). |
+| **Pass Criteria** | Slider accepts and sends all values 40–90°C. Firmware characteristic read-back matches sent value. |
+| **Requirement** | FR-04 |
+
+#### FN-V-05 — Automatic Shutoff at Target Temperature
+| | |
+|--|--|
+| **Objective** | Confirm device shuts off motor and heater when target is reached |
+| **Procedure** | 1. Set target temperature to 5°C above current room temperature. 2. Turn ON motor and heater. 3. Warm the TMP61 sensor until the reading exceeds the target. |
+| **Pass Criteria** | Both relays open (OFF) automatically. Motor and Heater buttons in app update to OFF state. |
+| **Requirement** | FR-05 |
+
+#### FN-V-06 — Target Reached Notification
+| | |
+|--|--|
+| **Objective** | Confirm app notifies user when target temperature is reached |
+| **Procedure** | Perform same steps as FN-V-05. Observe app UI after shutoff triggers. |
+| **Pass Criteria** | App displays toast or status message "Target temperature reached! Device stopped." within 2 seconds of shutoff. |
+| **Requirement** | FR-06 |
+
+#### FN-V-07 — Full Frothing Cycle (End-to-End)
+| | |
+|--|--|
+| **Objective** | Validate the complete real-world use case from start to finish |
+| **Procedure** | 1. Fill frother with cold milk (~5°C). 2. Connect app. 3. Set target temperature to 65°C. 4. Turn ON motor and heater. 5. Wait for device to reach target and auto-shutoff. 6. Check milk quality. |
+| **Pass Criteria** | Milk reaches 65°C (±3°C verified by reference thermometer). Device shuts off automatically. Milk is frothed. App notification is received. |
+| **Requirement** | FR-01 through FR-06 |
+
+---
+
+### 9.4 Battery Validation
+
+#### BAT-V-01 — Standby Battery Life
+| | |
+|--|--|
+| **Objective** | Confirm device operates in standby for ≥ 8 hours |
+| **Equipment** | Fully charged 2000mAh LiPo, multimeter or battery monitor |
+| **Procedure** | 1. Fully charge battery. 2. Power on device (no BLE connection, no relays active). 3. Leave for 8 hours. 4. Measure battery voltage. |
+| **Pass Criteria** | Battery voltage remains above 3.0V after 8 hours of standby. |
+| **Requirement** | NFR-05, NFR-06 |
+
+#### BAT-V-02 — Active Operation Battery Life
+| | |
+|--|--|
+| **Objective** | Confirm device operates through a realistic frothing session without power failure |
+| **Procedure** | 1. Fully charge battery. 2. Connect app. 3. Run a full frothing cycle (motor + heater ON for ~3 minutes). 4. Repeat 5 times. 5. Measure battery voltage after last cycle. |
+| **Pass Criteria** | Device completes all 5 cycles. Battery voltage does not fall below 3.0V. |
+| **Requirement** | NFR-06 |
+
+#### BAT-V-03 — Low Battery Protection
+| | |
+|--|--|
+| **Objective** | Confirm TP4056 protection circuit prevents over-discharge |
+| **Equipment** | Adjustable bench power supply (simulate depleted battery) |
+| **Procedure** | 1. Gradually reduce supply voltage below 3.0V. 2. Observe device behaviour. |
+| **Pass Criteria** | TP4056 protection circuit disconnects load before LiPo reaches 2.5V. Device shuts down gracefully (relays OFF). |
+| **Requirement** | NFR-06 |
+
+---
+
+### 9.5 Validation Sign-Off
+
+| Test ID | Description | Result | Date | Notes |
+|---------|-------------|--------|------|-------|
+| HW-V-01 | Power supply output | ☐ Pass / ☐ Fail | | |
+| HW-V-02 | Relay motor control | ☐ Pass / ☐ Fail | | |
+| HW-V-03 | Relay heater control | ☐ Pass / ☐ Fail | | |
+| HW-V-04 | TMP61 temperature accuracy | ☐ Pass / ☐ Fail | | |
+| HW-V-05 | Safety shutoff on power-up | ☐ Pass / ☐ Fail | | |
+| BLE-V-01 | Device discovery | ☐ Pass / ☐ Fail | | |
+| BLE-V-02 | BLE connection | ☐ Pass / ☐ Fail | | |
+| BLE-V-03 | BLE range | ☐ Pass / ☐ Fail | | |
+| BLE-V-04 | Disconnect safety shutoff | ☐ Pass / ☐ Fail | | |
+| FN-V-01 | Independent motor control | ☐ Pass / ☐ Fail | | |
+| FN-V-02 | Independent heater control | ☐ Pass / ☐ Fail | | |
+| FN-V-03 | Real-time temperature display | ☐ Pass / ☐ Fail | | |
+| FN-V-04 | Target temperature setting | ☐ Pass / ☐ Fail | | |
+| FN-V-05 | Automatic shutoff at target | ☐ Pass / ☐ Fail | | |
+| FN-V-06 | Target reached notification | ☐ Pass / ☐ Fail | | |
+| FN-V-07 | Full frothing cycle (E2E) | ☐ Pass / ☐ Fail | | |
+| BAT-V-01 | Standby battery life | ☐ Pass / ☐ Fail | | |
+| BAT-V-02 | Active operation battery life | ☐ Pass / ☐ Fail | | |
+| BAT-V-03 | Low battery protection | ☐ Pass / ☐ Fail | | |
+
+---
+
+## 10. Out of Scope
 
 - iOS application
 - Cloud connectivity or remote control (non-local BLE only)
